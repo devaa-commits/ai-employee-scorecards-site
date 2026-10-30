@@ -143,7 +143,8 @@ async function loadHosted() {
   if (latest.error) throw latest.error;
   DATA = latest.data?.data ?? { employees: [] };
   HISTORY = (hist.data ?? []).reverse();
-  const next = new Date(DATA.generatedAt ?? Date.now()); next.setUTCHours(next.getUTCHours() + 1, 7, 0, 0);
+  // GitHub runs the refresh at 7 past each hour (UTC); show the next of those.
+  const next = new Date(); next.setUTCMinutes(7, 0, 0); if (next <= Date.now()) next.setUTCHours(next.getUTCHours() + 1);
   STATUS = {
     hosted: true, running: false, everyMinutes: 60, nextRun: next.toISOString(),
     lastError: DATA.employees.filter((e) => e.error).map((e) => `${e.name}: ${e.error}`).join("; ") || null,
