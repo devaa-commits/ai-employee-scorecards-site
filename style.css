@@ -192,6 +192,7 @@ select { padding: 0 28px 0 10px; cursor: pointer; }
 .pill.warn { color: var(--warn-ink); background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .pill.bad { color: var(--bad-ink); background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .pill.none { color: var(--muted); }
+.proposed { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border: 1px dashed var(--axis); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
 h1 .pill { font-size: 12px; }
 
 .meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 60px; }

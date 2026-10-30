@@ -29,6 +29,8 @@ function fmt(v, f) {
   return String(v);
 }
 const target = (k) => k.target == null ? "none set" : `${k.direction === "max" ? "at most" : "at least"} ${fmt(k.target, k.fmt)}`;
+// Targets we proposed (not yet agreed with the employee's owner) are marked, so nobody mistakes them for agreed ones.
+const targetNote = (k) => k.target != null && k.targetSource === "proposed" ? h("span", { class: "proposed", title: "Proposed target, not yet agreed with the employee's owner" }, "proposed") : null;
 function ago(iso) {
   if (!iso) return "never";
   const m = Math.round((Date.now() - new Date(iso)) / 60000);
@@ -44,6 +46,7 @@ const longTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { month:
 
 const PILL = {
   "Met": ["good", "✓"], "Missed": ["bad", "✕"], "No data": ["none", "–"], "No target": ["none", "·"],
+  "Too few": ["none", "~"], "Historical": ["none", "◷"],
   "On track": ["good", "✓"], "Needs attention": ["warn", "!"], "Stalled or idle": ["bad", "■"],
 };
 const pill = (s) => { const [c, i] = PILL[s] ?? ["none", "–"]; return h("span", { class: `pill ${c}` }, h("span", { "aria-hidden": "true" }, i), s); };
@@ -365,7 +368,7 @@ function overview() {
             h("td", { class: "c-name" }, h("a", { href: `#/e/${e.key}` }, e.name), h("div", { class: "muted small" }, `${e.role} · ${e.group}`),
               e.stale ? h("div", { class: "small err-ink" }, "Refresh failed, showing last data") : null),
             h("td", { class: "c-status" }, pill(e.status)),
-            h("td", { class: "c-head" }, k ? [h("div", { class: "kv" }, h("b", {}, fmt(k.value, k.fmt)), h("span", {}, k.label)), h("div", { class: "muted small" }, `Target ${target(k)}`)] : "–"),
+            h("td", { class: "c-head" }, k ? [h("div", { class: "kv" }, h("b", {}, fmt(k.value, k.fmt)), h("span", {}, k.label)), h("div", { class: "muted small" }, `Target ${target(k)} `, targetNote(k))] : "–"),
             h("td", { class: "c-met" }, h("div", { class: "metrow" }, h("div", { class: "meter" }, h("span", { style: `width:${e.targets ? (e.met / e.targets) * 100 : 0}%` })), h("span", { class: "small" }, `${e.met}/${e.targets}`))),
             h("td", { class: "c-gap small" }, gap ? h("div", { class: "clamp", title: e.issue ? `${gap}. ${e.issue}` : gap }, gap) : h("span", { class: "muted" }, "No missed targets")),
             h("td", { class: "num c-vol" }, fmt(e.volume, "int"), h("div", { class: "muted small" }, e.unit)),
@@ -398,7 +401,7 @@ function kpiPanel(scored) {
           h("tbody", {}, ks.map((k) => h("tr", {},
             h("td", {}, k.label),
             h("td", { class: "num" }, h("b", {}, fmt(k.value, k.fmt))),
-            h("td", { class: "num muted" }, target(k)),
+            h("td", { class: "num muted" }, target(k), targetNote(k) ? [" ", targetNote(k)] : null),
             h("td", {}, pill(k.status)),
             showTrend ? h("td", {}, spark(trend(`${k.emp.key}.${k.metric}`)) ?? h("span", { class: "muted small" }, "–")) : null)))))))) :
       h("p", { class: "empty" }, "Every target is met."));
@@ -455,11 +458,11 @@ function employee(key) {
       e.issue ? h("p", { class: "summary-text" }, e.issue) : null),
     h("nav", { class: "subnav", "aria-label": "Sections" }, sections.map(([id, label]) => h("button", { onclick: jump(id) }, label))),
     h("section", { id: "s-kpis", class: "anchor" },
-      h("div", { class: "section-h" }, h("h2", {}, "KPIs"), h("span", { class: "muted small" }, scored ? `${missed} missed, ${scored - missed} met${kpis.length > scored ? `, ${kpis.length - scored} without a target` : ""}` : "")),
+      h("div", { class: "section-h" }, h("h2", {}, "KPIs"), h("span", { class: "muted small" }, scored ? `${missed} missed, ${scored - missed} met${kpis.length > scored ? `, ${kpis.length - scored} not judged (no target, too few cases or historical)` : ""}` : "")),
       h("div", { class: "tiles kpi-tiles" }, kpis.map((k) => h("div", { class: `tile kpi t-${tone(k.status)}` },
         h("div", { class: "label" }, k.label),
         h("div", { class: "value" }, fmt(k.value, k.fmt)),
-        h("div", { class: "kpi-status" }, pill(k.status), h("span", { class: "muted small" }, `Target ${target(k)}`)),
+        h("div", { class: "kpi-status" }, pill(k.status), h("span", { class: "muted small" }, `Target ${target(k)}`), targetNote(k)),
         k.numerator != null && k.denominator != null ? h("div", { class: "foot" }, `${fmt(k.numerator, "int")} of ${fmt(k.denominator, "int")}`) : null,
         spark(trend(`${e.key}.${k.metric}`)),
         k.how ? h("div", { class: "how" }, k.how) : null)))),
