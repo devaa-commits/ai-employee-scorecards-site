@@ -47,8 +47,8 @@ const PILL = {
 const pill = (s) => { const [c, i] = PILL[s] ?? ["none", "–"]; return h("span", { class: `pill ${c}` }, h("span", { "aria-hidden": "true" }, i), s); };
 
 // ---------- data ----------
-// Hosted (config.js has a Supabase URL): sign in with Google, read the tables the hourly GitHub job writes.
-// Local: read the server's /api/*.
+// Hosted (config.js has a Supabase URL): read the tables the hourly GitHub job writes. No sign-in;
+// the tables are readable with the publishable key. Local: read the server's /api/*.
 const CFG = window.SCORECARDS ?? {};
 const HOSTED = !!CFG.supabaseUrl;
 let sb = null;
@@ -56,37 +56,27 @@ let sb = null;
 async function hostedClient() {
   if (sb) return sb;
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm");
-  sb = createClient(CFG.supabaseUrl, CFG.supabaseKey);
+  sb = createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false } });
   return sb;
 }
-const signIn = async () => (await hostedClient()).auth.signInWithOAuth({
-  provider: "google",
-  options: { redirectTo: location.origin + location.pathname, queryParams: { hd: "vendasta.com" } },
-});
-const signOut = async () => { await (await hostedClient()).auth.signOut(); location.reload(); };
 
-function gate(msg, email) {
-  app.replaceChildren(h("header", { class: "top" }, h("h1", {}, "AI Workforce Scorecards")),
-    h("div", { class: "empty" }, h("p", {}, msg),
-      email ? h("button", { onclick: signOut }, "Sign out") : h("button", { class: "primary", onclick: signIn }, "Sign in with Google")));
+function gate(msg) {
+  app.replaceChildren(h("header", { class: "top" }, h("h1", {}, "AI Workforce Scorecards")), h("p", { class: "empty" }, msg));
 }
 
 async function loadHosted() {
   const c = await hostedClient();
-  const { data: { session } } = await c.auth.getSession();
-  if (!session) return gate("Sign in with your Vendasta Google account to see the scorecards.");
   const [latest, hist] = await Promise.all([
     c.from("scorecard_latest").select("data").eq("id", 1).maybeSingle(),
     c.from("scorecard_history").select("at,kpis").order("at", { ascending: false }).limit(48),
   ]);
   if (latest.error) throw latest.error;
-  // Row level security returns nothing (not an error) to accounts outside vendasta.com.
-  if (!latest.data) return gate(`No data for ${session.user.email}. Only vendasta.com Google accounts can see the scorecards; if you use one, the first refresh may not have run yet.`, session.user.email);
+  if (!latest.data) return gate("No data yet. The first hourly refresh hasn't run.");
   DATA = latest.data.data;
   HISTORY = (hist.data ?? []).reverse();
   const next = new Date(DATA.generatedAt); next.setUTCHours(next.getUTCHours() + 1, 7, 0, 0);
   STATUS = {
-    hosted: true, running: false, everyMinutes: 60, nextRun: next.toISOString(), email: session.user.email,
+    hosted: true, running: false, everyMinutes: 60, nextRun: next.toISOString(),
     lastError: DATA.employees.filter((e) => e.error).map((e) => `${e.name}: ${e.error}`).join("; ") || null,
   };
   render();
@@ -127,8 +117,7 @@ function renderStatus() {
       busy ? "Refreshing from Vendasta…" : `Updated ${ago(DATA?.generatedAt)}`),
     !busy && STATUS.nextRun ? h("span", {}, `Next refresh ${until(STATUS.nextRun)} (every ${STATUS.everyMinutes} min)`) : null,
     STATUS.lastError && !busy ? h("span", { title: STATUS.lastError, style: "color:var(--bad-ink)" }, "Last refresh had errors") : null,
-    STATUS.hosted ? h("button", { onclick: signOut, title: STATUS.email }, "Sign out")
-      : h("button", { class: "primary", onclick: refreshNow, disabled: busy }, busy ? "Refreshing…" : "Refresh now"),
+    STATUS.hosted ? null : h("button", { class: "primary", onclick: refreshNow, disabled: busy }, busy ? "Refreshing…" : "Refresh now"),
   ].filter(Boolean));
 }
 
