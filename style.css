@@ -106,6 +106,10 @@ select { padding: 0 28px 0 10px; cursor: pointer; }
 .logo svg { height: 18px; width: auto; display: block; }
 .brand-div { width: 1px; height: 20px; background: var(--axis); }
 .brand-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.partner-tabs { display: flex; gap: 2px; margin-left: 16px; background: var(--sunk); border: 1px solid var(--ring); border-radius: 8px; padding: 2px; }
+.partner-tabs a { text-decoration: none; font-size: 13px; color: var(--ink-2); padding: 4px 10px; border-radius: 6px; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.partner-tabs a.on { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: var(--shadow), 0 0 0 1px var(--ring); }
+.partner-tabs .tag { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
 .topbar .status { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink-2); }
 .topbar .actions { display: flex; gap: 6px; }
 .st { display: inline-flex; align-items: center; white-space: nowrap; }
@@ -284,7 +288,8 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
 
 /* ---------- phone ---------- */
 @media (max-width: 720px) {
-  .brand-div, .brand-name, .topbar .st { display: none; }
+  .brand-div, .brand-name, .topbar .st, .partner-tabs .tag { display: none; }
+  .partner-tabs { margin-left: 4px; }
   .topbar { gap: 8px; padding: 0 12px; }
   .topbar .status { gap: 8px; }
   .topbar .status .btn .btn-label { display: none; }

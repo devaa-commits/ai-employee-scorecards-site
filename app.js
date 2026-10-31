@@ -5,6 +5,20 @@ const app = document.getElementById("app");
 let DATA = null, HISTORY = [], STATUS = null;
 const ui = { status: "all", group: "all", q: "", missedOnly: true, nav: false };
 
+// Each partner has its own tab: VMF (Vendasta) and PRBS (Broadly by Vendasta).
+const PARTNERS = [["VMF", "Vendasta", "VMF"], ["PRBS", "Broadly", "PRBS"]];
+const partnerOfEmp = (e) => e?.partner ?? "VMF";
+const partnerName = (p) => (PARTNERS.find(([id]) => id === p) ?? [p, p])[1];
+const partnerHref = (p) => (p === "VMF" ? "#/" : `#/p/${p}`);
+const empsOf = (p) => (DATA?.employees ?? []).filter((e) => partnerOfEmp(e) === p);
+// The partner being viewed: from the URL, or the open employee's partner.
+function currentPartner() {
+  const p = location.hash.match(/^#\/p\/(\w+)/)?.[1];
+  if (p) return p;
+  const k = location.hash.match(/^#\/e\/([\w-]+)/)?.[1];
+  return partnerOfEmp(DATA?.employees?.find((e) => e.key === k));
+}
+
 // ---------- helpers ----------
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -117,7 +131,8 @@ function downloadCsv(name, cols, rows) {
 }
 const KPI_CSV = [["emp", "Employee"], ["label", "KPI"], ["value", "Value"], [(k) => k.target ?? "", "Target"], ["direction", "Direction"], ["status", "Status"], [(k) => k.numerator ?? "", "Numerator"], [(k) => k.denominator ?? "", "Denominator"]];
 function exportOverview() {
-  downloadCsv("ai-employee-kpis", KPI_CSV, DATA.employees.flatMap((e) => (e.kpis ?? []).map((k) => ({ ...k, emp: e.name }))));
+  const p = currentPartner();
+  downloadCsv(`ai-employee-kpis-${p.toLowerCase()}`, KPI_CSV, empsOf(p).flatMap((e) => (e.kpis ?? []).map((k) => ({ ...k, emp: e.name }))));
 }
 function exportEmployee(e) {
   downloadCsv(`${e.key}-kpis`, KPI_CSV, (e.kpis ?? []).map((k) => ({ ...k, emp: e.name })));
@@ -192,30 +207,34 @@ function topbar() {
       h("span", { class: "logo", html: LOGO }),
       h("span", { class: "brand-div", "aria-hidden": "true" }),
       h("span", { class: "brand-name" }, "AI Workforce Scorecards")),
+    h("nav", { class: "partner-tabs", "aria-label": "Partner" }, PARTNERS.map(([id, name, tag]) =>
+      h("a", { href: partnerHref(id), class: currentPartner() === id ? "on" : "", "aria-current": currentPartner() === id ? "page" : null }, name, h("span", { class: "tag" }, tag)))),
     h("div", { class: "status", id: "status" }),
     h("div", { class: "actions" },
       btn(theme === "auto" ? "Theme: system" : `Theme: ${theme}`, themeIcon, cycleTheme, { hideLabel: true })));
 }
 
 function sidebar(currentKey) {
-  const groups = [...new Set(DATA.employees.map((e) => e.group))];
+  const partner = currentPartner();
+  const emps = empsOf(partner);
+  const groups = [...new Set(emps.map((e) => e.group))];
   const close = () => { ui.nav = false; render(); };
   return [
     h("div", { class: `scrim${ui.nav ? " show" : ""}`, onclick: close }),
     h("nav", { class: `sidebar${ui.nav ? " open" : ""}`, "aria-label": "Scorecards" },
       h("div", { class: "side-head" }, h("span", { class: "logo", html: LOGO }),
         h("button", { class: "btn icon-only", "aria-label": "Close navigation", onclick: close }, icon("close"))),
-      h("a", { class: `nav-item${currentKey ? "" : " active"}`, href: "#/", onclick: () => { ui.nav = false; } }, icon("grid"), "Overview"),
+      h("a", { class: `nav-item${currentKey ? "" : " active"}`, href: partnerHref(partner), onclick: () => { ui.nav = false; } }, icon("grid"), `${partnerName(partner)} overview`),
       groups.map((g) => h("div", { class: "nav-group" },
         h("div", { class: "nav-label" }, g),
-        DATA.employees.filter((e) => e.group === g).map((e) =>
+        emps.filter((e) => e.group === g).map((e) =>
           h("a", { class: `nav-item${e.key === currentKey ? " active" : ""}`, href: `#/e/${e.key}`, onclick: () => { ui.nav = false; }, title: e.status },
             h("span", { class: `dot ${tone(e.status)}`, "aria-hidden": "true" }), h("span", { class: "nav-name" }, e.name),
             h("span", { class: "nav-count" }, e.targets ? `${e.met}/${e.targets}` : ""))))),
       h("div", { class: "nav-group" },
         h("div", { class: "nav-label" }, "Team"),
         h("a", { class: "nav-item", href: TRACKER, target: "_blank", rel: "noopener" }, icon("ext"), "Action Tracker")),
-      h("p", { class: "side-foot" }, `Partner VMF · ${DATA.windowDays ?? 30}-day window`, h("br"), `Last refresh took ${DATA.seconds?.toFixed(0) ?? "–"} s`)),
+      h("p", { class: "side-foot" }, `Partner ${partner} · ${DATA.windowDays ?? 30}-day window`, h("br"), `Last refresh took ${DATA.seconds?.toFixed(0) ?? "–"} s`)),
   ];
 }
 
@@ -324,7 +343,9 @@ function dailyChart(daily, series) {
 
 // ---------- overview ----------
 function overview() {
-  const emps = DATA.employees;
+  const partner = currentPartner();
+  const emps = empsOf(partner);
+  if (!emps.length) return [pageHead({ title: `${partnerName(partner)} overview` }), h("div", { class: "state" }, h("h2", {}, "No scorecards yet"), h("p", { class: "muted" }, `No ${partnerName(partner)} (${partner}) AI employees have been scored yet. They appear here after the next refresh.`))];
   const kpis = emps.flatMap((e) => (e.kpis ?? []).map((k) => ({ ...k, emp: e })));
   const scored = kpis.filter((k) => k.status === "Met" || k.status === "Missed");
   const met = scored.filter((k) => k.status === "Met").length;
@@ -339,8 +360,8 @@ function overview() {
 
   return [
     pageHead({
-      title: "Overview",
-      sub: `VMF AI employees, scored against their own rubrics over the last ${DATA.windowDays} days.`,
+      title: `${partnerName(partner)} overview`,
+      sub: `${partnerName(partner)} (${partner}) AI employees, scored against their own rubrics over the last ${DATA.windowDays} days.`,
       meta: `Data as of ${longTime(DATA.generatedAt)} · refreshes itself every hour`,
       actions: [btn("Export CSV", "download", exportOverview), btn("Copy link", "link", copyLink, { hideLabel: true }), btn("Print", "print", () => print(), { hideLabel: true })],
     }),
@@ -380,7 +401,7 @@ function overview() {
 
 function kpiPanel(scored) {
   const shown = scored.filter((k) => !ui.missedOnly || k.status === "Missed");
-  const byEmp = DATA.employees.map((e) => ({ e, ks: shown.filter((k) => k.emp.key === e.key).sort((a, b) => gapOf(b) - gapOf(a)) }))
+  const byEmp = empsOf(currentPartner()).map((e) => ({ e, ks: shown.filter((k) => k.emp.key === e.key).sort((a, b) => gapOf(b) - gapOf(a)) }))
     .filter((g) => g.ks.length)
     .sort((a, b) => b.ks.filter((k) => k.status === "Missed").length - a.ks.filter((k) => k.status === "Missed").length);
   const missed = scored.filter((k) => k.status === "Missed").length;
@@ -423,7 +444,7 @@ function select(options, value, on) {
 
 // ---------- employee page ----------
 function employee(key) {
-  const emps = DATA.employees;
+  const emps = empsOf(partnerOfEmp(DATA.employees.find((x) => x.key === key)));
   const i = emps.findIndex((x) => x.key === key);
   const e = emps[i];
   if (!e) return [pageHead({ crumbs: [{ label: "Overview", href: "#/" }], title: "Not found" }), h("p", { class: "empty" }, "No scorecard for this employee. ", h("a", { href: "#/" }, "Back to the overview"))];
@@ -439,7 +460,7 @@ function employee(key) {
 
   return [
     pageHead({
-      crumbs: [{ label: "Overview", href: "#/" }, { label: e.group }, { label: e.name }],
+      crumbs: [{ label: `${partnerName(partnerOfEmp(e))} overview`, href: partnerHref(partnerOfEmp(e)) }, { label: e.group }, { label: e.name }],
       title: [e.name, " ", pill(e.status)],
       sub: `${e.role} · ${e.source}`,
       meta: `${fmt(e.volume, "int")} ${e.unit} · ${shortDate(e.window?.from)} – ${shortDate(e.window?.to)} · last work ${ago(e.lastActivity)}`,
@@ -482,7 +503,7 @@ function employee(key) {
 
 // ---------- router ----------
 function render() {
-  const m = location.hash.match(/^#\/e\/(\w+)/);
+  const m = location.hash.match(/^#\/e\/([\w-]+)/);
   const key = m?.[1] ?? null;
   document.body.classList.toggle("nav-open", ui.nav);
   if (!DATA) {
